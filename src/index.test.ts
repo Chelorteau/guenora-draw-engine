@@ -62,23 +62,22 @@ describe("ticketsFileHash (A.2)", () => {
   });
 });
 
-describe("computeProofHash (A.4)", () => {
-  it("engage nist|btc|participants|tickets|closing (vecteur de référence)", async () => {
+describe("computeProofHash (A.4, ADR-026 v3 : urne seule)", () => {
+  it("engage nist|btc|tickets|closing (vecteur de référence v3, sans participants)", async () => {
     const proof = await computeProofHash({
       nist: "a1b2c3d4nistbeaconvalue",
       btc: "0000000000000000000abcdef1234567890fedcba0987654321aabbccddeeff0",
-      participantsFileHash: "37affa9838346435ba4622c1eedeb3d777a7780b1c5c0681a4a6deadf4ac9682",
       ticketsFileHash: TICKETS_FILE_HASH,
       closing: "2026-06-15T14:00:00Z",
     });
-    expect(proof).toBe("80f1c8867278be45fbc1f3c3ed4416c57b327ef6a241df35c598b4491f136a82");
+    expect(proof).toBe("83d008158424be67f482687af3d607405cf7da036e29891167c32704baf0dc83");
   });
   it("normalise nist/btc en minuscule (casse indifférente)", async () => {
     const lower = await computeProofHash({
-      nist: "abc", btc: "def", participantsFileHash: "x", ticketsFileHash: "y", closing: "z",
+      nist: "abc", btc: "def", ticketsFileHash: "y", closing: "z",
     });
     const upper = await computeProofHash({
-      nist: "ABC", btc: "DEF", participantsFileHash: "x", ticketsFileHash: "y", closing: "z",
+      nist: "ABC", btc: "DEF", ticketsFileHash: "y", closing: "z",
     });
     expect(lower).toBe(upper);
   });

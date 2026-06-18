@@ -5,8 +5,10 @@
 //   - Publié tel quel en open-source (vérification par n'importe qui).
 // Si serveur et public exécutent CE module, ils ne peuvent pas diverger (E2).
 //
-// Conforme à ADR-026 v2 (Annexe A) + ADR-016 + ADR-025 :
+// Conforme à ADR-026 v3 (Annexe A) + ADR-016 + ADR-025 :
 //   - SHA-256 uniquement (Web Crypto `crypto.subtle`, dispo Deno/Node18+/navigateur).
+//   - proof_hash = SHA-256(nist | btc | tickets_file_hash | closing) — UN SEUL
+//     artefact public, l'urne (v3 : participants_file_hash retiré, participants ≡ urne).
 //   - rang_brut = int(SHA-256(proof_hash | ticket_hash))  (F7, sur ticket_hash)
 //   - tri rang_brut ASC, départage ticket_hash lexicographique ASC
 //   - skip logic : 1 récompense max par participant_hash (F3, champ public)
@@ -84,20 +86,22 @@ export function ticketsFileHash(urnContent: string): Promise<string> {
 }
 
 /**
- * proof_hash (Annexe A.4) : engage les DEUX fichiers (participants + urne).
- * `nist` et `btc` sont normalisés en minuscule.
+ * proof_hash (Annexe A.4, ADR-026 v3) : engage UN SEUL artefact public, l'urne
+ * de tickets. Puisque participants ≡ urne (tout participant a des tickets via le
+ * portail), participants_file_hash est retiré de la preuve. `nist` et `btc` sont
+ * normalisés en minuscule.
+ *
+ *   proof_hash = SHA-256( nist | btc | tickets_file_hash | closing )
  */
 export function computeProofHash(params: {
   nist: string;
   btc: string;
-  participantsFileHash: string;
   ticketsFileHash: string;
   closing: string; // ISO-8601 UTC sans ms, suffixe Z
 }): Promise<string> {
   const input = [
     params.nist.toLowerCase(),
     params.btc.toLowerCase(),
-    params.participantsFileHash,
     params.ticketsFileHash,
     params.closing,
   ].join("|");

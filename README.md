@@ -13,7 +13,7 @@ Moteur de tirage **GUENORA** - sélection du gagnant **vérifiable et reproducti
 - **Aucune dépendance.**
 - Algorithme figé par l'**annexe d'encodage canonique** (ADR-026 §Annexe A) + **vecteurs de test** (`src/index.test.ts`).
 
-## Algorithme (ADR-016 + ADR-026 v2)
+## Algorithme (ADR-016 + ADR-026 v3)
 
 ```
 rang_brut(ticket) = int256( SHA-256( proof_hash | ticket_hash ) )      # F7 : sur ticket_hash
@@ -31,14 +31,13 @@ MAX_RANK = 1000
 ```ts
 import { ticketsFileHash, computeProofHash, findMainWinner } from "@guenora/draw-engine";
 
-// 1. Télécharger l'urne publique (sequence:ticket_hash:participant_hash -> non,
-//    format : ticket_hash:participant_hash) et les valeurs publiées dans `draws`.
+// 1. Télécharger l'urne publique (format : ticket_hash:participant_hash, triée
+//    par ticket_hash) et les valeurs publiées dans `draws`.
 const tfh = await ticketsFileHash(urneContent);
-// 2. Recomposer proof_hash et vérifier qu'il correspond à draws.proof_hash.
+// 2. Recomposer proof_hash (ADR-026 v3 : urne seule) et comparer à draws.proof_hash.
 const proof = await computeProofHash({
   nist,
   btc,
-  participantsFileHash,
   ticketsFileHash: tfh,
   closing,
 });
@@ -51,7 +50,7 @@ Et vérifier que l'urne était **ancrée avant l'aléa** (OpenTimestamps, cf. `d
 ## API
 
 - `sha256Hex(input)` · `buildUrn(entries)` · `parseUrn(content)` · `ticketsFileHash(urn)`
-- `computeProofHash({ nist, btc, participantsFileHash, ticketsFileHash, closing })`
+- `computeProofHash({ nist, btc, ticketsFileHash, closing })` (ADR-026 v3 : urne seule)
 - `rangBrut(proofHash, ticketHash)` · `assignOutcomes(proofHash, entries)` · `findMainWinner(proofHash, urn)`
 - `MAX_RANK`
 

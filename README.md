@@ -1,5 +1,8 @@
 # @guenora/draw-engine
 
+> **Miroir en lecture seule** du dossier `packages/draw-engine` du monorepo GUENORA.
+> Le développement se fait en amont ; n'ouvrez pas de PR ici.
+
 Moteur de tirage **GUENORA** - sélection du gagnant **vérifiable et reproductible**.
 
 > Source de vérité **unique** : ce module est importé par `supabase/functions/execute-draw`
@@ -45,7 +48,8 @@ const proof = await computeProofHash({
 const winner = await findMainWinner(proof, urneContent);
 ```
 
-Et vérifier que l'urne était **ancrée avant l'aléa** (OpenTimestamps, cf. `docs/runbooks/ots-ancrage-manuel.md`).
+Et vérifier que l'urne était **ancrée avant l'aléa** via OpenTimestamps (la procédure
+d'ancrage manuel est documentée dans le runbook interne du monorepo GUENORA, en amont).
 
 ## API
 
@@ -57,5 +61,10 @@ Et vérifier que l'urne était **ancrée avant l'aléa** (OpenTimestamps, cf. `d
 ## Tests
 
 ```bash
+npm install     # vitest + typescript (devDependencies autonomes)
 npm test        # vitest : vecteurs canoniques (ADR-026 §Annexe A.7)
 ```
+
+## Licence
+
+[MIT](./LICENSE) - Copyright (c) 2026 Chelo Lorteau / GUENORA.

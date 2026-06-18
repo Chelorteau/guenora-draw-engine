@@ -1,0 +1,20 @@
+{
+  "name": "@guenora/draw-engine",
+  "version": "0.1.0",
+  "description": "Moteur de tirage GUENORA - sélection vérifiable et reproductible (ADR-016 / ADR-026). Source de vérité unique : importé par execute-draw et publié en open-source pour vérification publique.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  }
+}

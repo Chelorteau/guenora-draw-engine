@@ -5,6 +5,9 @@ import {
   parseUrn,
   ticketsFileHash,
   computeProofHash,
+  drandRandomness,
+  drandRoundForTime,
+  DRAND_QUICKNET,
   rangBrut,
   assignOutcomes,
   findMainWinner,
@@ -28,6 +31,12 @@ const RANG_2 = BigInt("0x4ee9726ef69c12d6711bfe2b325a84f8db1b9744ddcdecd2b73f590
 
 const URN_CONTENT = `${T1}:${PH_A}\n${T2}:${PH_B}`;
 const TICKETS_FILE_HASH = "5bdc87890053f8233b572d6a3b399081ea4a70e580eb7f80c7cd363fde65e4c4";
+
+// Sources d'entropie v4 (ADR-027). DRAND_RANDOMNESS = randomness du round drand
+// quicknet 20000000 = SHA-256 des OCTETS de sa signature (vecteur réel pinné,
+// récupéré le 2026-06-19, vérifié == randomness de l'API legacy).
+const BTC = "0000000000000000000abcdef1234567890fedcba0987654321aabbccddeeff0";
+const DRAND_RANDOMNESS = "f39c98df5525968e6622e0c63edb3d1f9c5607cf780db78abdded36e4b3dba95";
 
 describe("sha256Hex (A.1)", () => {
   it("reproduit le proof_hash de référence", async () => {
@@ -62,24 +71,81 @@ describe("ticketsFileHash (A.2)", () => {
   });
 });
 
-describe("computeProofHash (A.4, ADR-026 v3 : urne seule)", () => {
-  it("engage nist|btc|tickets|closing (vecteur de référence v3, sans participants)", async () => {
+describe("computeProofHash (A.4, ADR-027 v4 : liste ordonnée de sources)", () => {
+  it("engage s_1|...|s_k|tickets|closing - jeu initial [btc, drand] (vecteur de référence v4)", async () => {
     const proof = await computeProofHash({
-      nist: "a1b2c3d4nistbeaconvalue",
-      btc: "0000000000000000000abcdef1234567890fedcba0987654321aabbccddeeff0",
+      sources: [BTC, DRAND_RANDOMNESS],
       ticketsFileHash: TICKETS_FILE_HASH,
       closing: "2026-06-15T14:00:00Z",
     });
-    expect(proof).toBe("83d008158424be67f482687af3d607405cf7da036e29891167c32704baf0dc83");
+    expect(proof).toBe("e62e6ba16d0e29f21e6981f3b3da2e7a4d6463a65d3e6183bed9bcafe5029181");
   });
-  it("normalise nist/btc en minuscule (casse indifférente)", async () => {
-    const lower = await computeProofHash({
-      nist: "abc", btc: "def", ticketsFileHash: "y", closing: "z",
-    });
-    const upper = await computeProofHash({
-      nist: "ABC", btc: "DEF", ticketsFileHash: "y", closing: "z",
-    });
+
+  it("normalise les sources en minuscule (casse indifférente)", async () => {
+    const lower = await computeProofHash({ sources: ["abc", "def"], ticketsFileHash: "y", closing: "z" });
+    const upper = await computeProofHash({ sources: ["ABC", "DEF"], ticketsFileHash: "y", closing: "z" });
     expect(lower).toBe(upper);
+  });
+
+  it("l'ordre des sources est engagé : btc|drand != drand|btc", async () => {
+    const a = await computeProofHash({ sources: [BTC, DRAND_RANDOMNESS], ticketsFileHash: "y", closing: "z" });
+    const b = await computeProofHash({ sources: [DRAND_RANDOMNESS, BTC], ticketsFileHash: "y", closing: "z" });
+    expect(a).not.toBe(b);
+  });
+
+  it("rétro-compat : surcharge @deprecated {nist,btc} == ancien proof v3 == sources:[nist,btc]", async () => {
+    const v3 = await computeProofHash({
+      nist: "a1b2c3d4nistbeaconvalue",
+      btc: BTC,
+      ticketsFileHash: TICKETS_FILE_HASH,
+      closing: "2026-06-15T14:00:00Z",
+    });
+    expect(v3).toBe("83d008158424be67f482687af3d607405cf7da036e29891167c32704baf0dc83");
+    const viaSources = await computeProofHash({
+      sources: ["a1b2c3d4nistbeaconvalue", BTC],
+      ticketsFileHash: TICKETS_FILE_HASH,
+      closing: "2026-06-15T14:00:00Z",
+    });
+    expect(viaSources).toBe(v3);
+  });
+});
+
+describe("drand quicknet helpers (ADR-027 Annexe A)", () => {
+  // Vecteur réel : round 20000000 du beacon quicknet (historique, fixe). Signature
+  // récupérée le 2026-06-19 depuis api.drand.sh ; randomness dérivée vérifiée.
+  const ROUND_20M_SIG =
+    "96892582a33552a7b67ba44ef09c3ccd535bbebe760c93ecf45be8958d0c0f06390c6d19d7bf492eb806af7eef6b125c";
+
+  it("drandRandomness = SHA-256(signature_bytes) (vecteur round 20000000)", async () => {
+    expect(await drandRandomness(ROUND_20M_SIG)).toBe(DRAND_RANDOMNESS);
+  });
+
+  it("drandRandomness hash les OCTETS, pas la chaîne hex", async () => {
+    expect(await drandRandomness(ROUND_20M_SIG)).not.toBe(await sha256Hex(ROUND_20M_SIG));
+  });
+
+  it("drandRandomness rejette une signature non-hex", async () => {
+    await expect(drandRandomness("xyz")).rejects.toThrow();
+  });
+
+  it("constantes quicknet épinglées (genesis/period/chainHash/scheme)", () => {
+    expect(DRAND_QUICKNET.genesisTime).toBe(1692803367);
+    expect(DRAND_QUICKNET.period).toBe(3);
+    expect(DRAND_QUICKNET.chainHash).toBe(
+      "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+    );
+    expect(DRAND_QUICKNET.scheme).toBe("bls-unchained-g1-rfc9380");
+  });
+
+  it("drandRoundForTime : premier round à/après t (bords inclus)", () => {
+    const { genesisTime: g, period: p } = DRAND_QUICKNET;
+    const timeOfRound20M = g + (20000000 - 1) * p;
+    expect(timeOfRound20M).toBe(1752803364);
+    expect(drandRoundForTime(timeOfRound20M, g, p)).toBe(20000000); // pile -> ce round (à)
+    expect(drandRoundForTime(timeOfRound20M + 1, g, p)).toBe(20000001); // 1s après -> suivant
+    expect(drandRoundForTime(timeOfRound20M - 1, g, p)).toBe(20000000); // 1s avant -> à/après
+    expect(drandRoundForTime(g, g, p)).toBe(1); // t == genesis -> round 1
+    expect(drandRoundForTime(g - 100, g, p)).toBe(1); // t < genesis -> round 1
   });
 });
 

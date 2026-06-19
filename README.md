@@ -14,11 +14,15 @@ Moteur de tirage **GUENORA** - sélection du gagnant **vérifiable et reproducti
 
 - **SHA-256 uniquement** (Web Crypto, fonctionne en Deno / Node 18+ / navigateur).
 - **Aucune dépendance.**
-- Algorithme figé par l'**annexe d'encodage canonique** (ADR-026 §Annexe A) + **vecteurs de test** (`src/index.test.ts`).
+- Algorithme figé par l'**annexe d'encodage canonique** (ADR-026 §Annexe A + ADR-027 §Annexe B pour la v4) + **vecteurs de test** (`src/index.test.ts`).
 
-## Algorithme (ADR-016 + ADR-026 v3)
+## Algorithme (ADR-016 + ADR-026 + ADR-027 v4)
 
 ```
+proof_hash = SHA-256( s_1 | s_2 | ... | s_k | tickets_file_hash | closing )   # ADR-027 v4
+  jeu de sources initial = [ btc, drand ] : SHA-256( btc | drand | tickets_file_hash | closing )
+  sources en minuscule, dans l'ordre engagé (figé par concours, ADR-027 §2.3.1)
+
 rang_brut(ticket) = int256( SHA-256( proof_hash | ticket_hash ) )      # F7 : sur ticket_hash
 tri par rang_brut ASC, départage ticket_hash lexicographique ASC
 skip logic : 1 récompense max par participant_hash (champ public)       # F3
@@ -32,19 +36,31 @@ MAX_RANK = 1000
 ## Vérifier un tirage (tiers, données publiques uniquement)
 
 ```ts
-import { ticketsFileHash, computeProofHash, findMainWinner } from "@guenora/draw-engine";
+import {
+  ticketsFileHash,
+  computeProofHash,
+  findMainWinner,
+  drandRandomness,
+  drandRoundForTime,
+  DRAND_QUICKNET,
+} from "@guenora/draw-engine";
 
-// 1. Télécharger l'urne publique (format : ticket_hash:participant_hash, triée
-//    par ticket_hash) et les valeurs publiées dans `draws`.
+// 1. Télécharger l'urne publique (ticket_hash:participant_hash, triée par
+//    ticket_hash) + les valeurs publiées dans `draws` (sources engagées, closing).
 const tfh = await ticketsFileHash(urneContent);
-// 2. Recomposer proof_hash (ADR-026 v3 : urne seule) et comparer à draws.proof_hash.
+
+// 2. Dériver soi-même chaque valeur de source (sans faire confiance à GUENORA) :
+//    - btc   = hash du 1er bloc Bitcoin après draw_scheduled_at (via un explorateur)
+//    - drand : round = drandRoundForTime(drawScheduledEpoch, DRAND_QUICKNET.genesisTime,
+//              DRAND_QUICKNET.period) ; fetch sa signature sur api.drand.sh ;
+//              const drand = await drandRandomness(signatureHex)
+// 3. Recomposer proof_hash v4 (ADR-027 : liste ordonnée de sources) et comparer.
 const proof = await computeProofHash({
-  nist,
-  btc,
+  sources: [btc, drand], // ordre engagé, figé par concours
   ticketsFileHash: tfh,
   closing,
 });
-// 3. Rejouer la sélection et comparer au gagnant publié.
+// 4. Rejouer la sélection et comparer au gagnant publié.
 const winner = await findMainWinner(proof, urneContent);
 ```
 
@@ -54,7 +70,9 @@ d'ancrage manuel est documentée dans le runbook interne du monorepo GUENORA, en
 ## API
 
 - `sha256Hex(input)` · `buildUrn(entries)` · `parseUrn(content)` · `ticketsFileHash(urn)`
-- `computeProofHash({ nist, btc, ticketsFileHash, closing })` (ADR-026 v3 : urne seule)
+- `computeProofHash({ sources, ticketsFileHash, closing })` (ADR-027 v4 : liste ordonnée de sources)
+  - surcharge `@deprecated` `{ nist, btc, ticketsFileHash, closing }` (v3) - retirée en PR B
+- `drandRandomness(signatureHex)` · `drandRoundForTime(epochSeconds, genesis, period)` · `DRAND_QUICKNET`
 - `rangBrut(proofHash, ticketHash)` · `assignOutcomes(proofHash, entries)` · `findMainWinner(proofHash, urn)`
 - `MAX_RANK`
 
@@ -62,7 +80,7 @@ d'ancrage manuel est documentée dans le runbook interne du monorepo GUENORA, en
 
 ```bash
 npm install     # vitest + typescript (devDependencies autonomes)
-npm test        # vitest : vecteurs canoniques (ADR-026 §Annexe A.7)
+npm test        # vitest : vecteurs canoniques (ADR-026 §A + ADR-027 §B v4 + drand)
 ```
 
 ## Licence

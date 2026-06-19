@@ -5,10 +5,11 @@
 //   - Publié tel quel en open-source (vérification par n'importe qui).
 // Si serveur et public exécutent CE module, ils ne peuvent pas diverger (E2).
 //
-// Conforme à ADR-026 v3 (Annexe A) + ADR-016 + ADR-025 :
+// Conforme à ADR-027 v4 (Annexe B) + ADR-026 + ADR-016 + ADR-025 :
 //   - SHA-256 uniquement (Web Crypto `crypto.subtle`, dispo Deno/Node18+/navigateur).
-//   - proof_hash = SHA-256(nist | btc | tickets_file_hash | closing) — UN SEUL
-//     artefact public, l'urne (v3 : participants_file_hash retiré, participants ≡ urne).
+//   - proof_hash = SHA-256(s_1 | ... | s_k | tickets_file_hash | closing) - liste
+//     ORDONNÉE de valeurs de sources d'entropie (jeu initial [btc, drand]).
+//   - drand : valeur = SHA-256(octets de signature) ; round = drandRoundForTime.
 //   - rang_brut = int(SHA-256(proof_hash | ticket_hash))  (F7, sur ticket_hash)
 //   - tri rang_brut ASC, départage ticket_hash lexicographique ASC
 //   - skip logic : 1 récompense max par participant_hash (F3, champ public)
@@ -114,36 +115,14 @@ export function ticketsFileHash(urnContent: string): Promise<string> {
  * chaque valeur (hash de bloc Bitcoin, randomness drand) est un INPUT déjà calculé.
  * Séparateur "|" obligatoire (ADR-011, anti glissement de frontière). Figé : changer
  * l'encodage invalide tout tirage.
- *
- * La surcharge @deprecated v3 ({ nist, btc, ... }) est conservée TEMPORAIREMENT
- * pour qu'execute-draw compile tant que PR B ne l'a pas migré vers `sources` ; elle
- * recalcule l'ancien proof_hash v3 (nist | btc | ...) à l'identique. À RETIRER en
- * PR B (execute-draw passera à `{ sources: [btc, drand], ... }`).
  */
 export function computeProofHash(params: {
   sources: readonly string[];
   ticketsFileHash: string;
   closing: string; // ISO-8601 UTC sans ms, suffixe Z
-}): Promise<string>;
-/** @deprecated v3 (nist|btc). Retiré en PR B (ADR-027) - n'utiliser que `sources`. */
-export function computeProofHash(params: {
-  nist: string;
-  btc: string;
-  ticketsFileHash: string;
-  closing: string;
-}): Promise<string>;
-export function computeProofHash(params: {
-  sources?: readonly string[];
-  nist?: string;
-  btc?: string;
-  ticketsFileHash: string;
-  closing: string;
 }): Promise<string> {
-  const sources =
-    params.sources ??
-    [params.nist, params.btc].filter((s): s is string => typeof s === "string");
   const input = [
-    ...sources.map((s) => s.toLowerCase()),
+    ...params.sources.map((s) => s.toLowerCase()),
     params.ticketsFileHash,
     params.closing,
   ].join("|");

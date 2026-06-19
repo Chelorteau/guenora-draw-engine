@@ -93,20 +93,15 @@ describe("computeProofHash (A.4, ADR-027 v4 : liste ordonnée de sources)", () =
     expect(a).not.toBe(b);
   });
 
-  it("rétro-compat : surcharge @deprecated {nist,btc} == ancien proof v3 == sources:[nist,btc]", async () => {
-    const v3 = await computeProofHash({
-      nist: "a1b2c3d4nistbeaconvalue",
-      btc: BTC,
-      ticketsFileHash: TICKETS_FILE_HASH,
-      closing: "2026-06-15T14:00:00Z",
-    });
-    expect(v3).toBe("83d008158424be67f482687af3d607405cf7da036e29891167c32704baf0dc83");
-    const viaSources = await computeProofHash({
+  it("continuité : sources:[ancien_nist, btc] reproduit le proof v3 historique (83d008...)", async () => {
+    // La forme v4 avec les 2 mêmes valeurs que l'ancien v3 ([nist, btc]) redonne
+    // le vecteur v3 -> l'encodage est resté byte-compatible (seul le jeu de sources change).
+    const proof = await computeProofHash({
       sources: ["a1b2c3d4nistbeaconvalue", BTC],
       ticketsFileHash: TICKETS_FILE_HASH,
       closing: "2026-06-15T14:00:00Z",
     });
-    expect(viaSources).toBe(v3);
+    expect(proof).toBe("83d008158424be67f482687af3d607405cf7da036e29891167c32704baf0dc83");
   });
 });
 
